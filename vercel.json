@@ -11,6 +11,5 @@
       "src": "/api/(.*)",
       "dest": "/api/index.js"
     }
-  ],
-  "installCommand": "npx -p pnpm@10 pnpm install"
+  ]
 }
