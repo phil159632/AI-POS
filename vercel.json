@@ -3,16 +3,23 @@
   "builds": [
     {
       "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist/public"
-      }
+      "use": "@vercel/node",
+      "config": { "includeFiles": ["dist/**"] }
     }
   ],
-  "rewrites": [
+  "routes": [
     {
-      "source": "/((?!api/|assets/|favicon.ico).*)",
-      "destination": "/index.html"
+      "src": "/api/(.*)",
+      "dest": "dist/index.js"
+    },
+    {
+      "src": "/assets/(.*)",
+      "headers": { "cache-control": "s-maxage=31536000, immutable" },
+      "dest": "dist/public/assets/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "dist/public/index.html"
     }
   ]
 }
