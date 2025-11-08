@@ -1,13 +1,18 @@
 {
-    "version": 2,
-    "builds": [
-      {
-        "src": "package.json",
-        "use": "@vercel/static-build",
-        "config": {
-          "distDir": "dist/public"
-        }
+  "version": 2,
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist/public"
       }
-    ]
-  }
-  
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/((?!api/|assets/|favicon.ico).*)",
+      "destination": "/index.html"
+    }
+  ]
+}
