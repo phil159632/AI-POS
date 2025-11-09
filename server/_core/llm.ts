@@ -26,7 +26,7 @@ export async function submitLLMTask(prompt: string ): Promise<{ task_id: string 
       'content-type': 'application/json',
       'API_KEY': apiKey,
     },
-    body: JSON.stringify({ prompt, mode: 'speed' }),
+    body: JSON.stringify({ prompt, mode: 'chat' }),
   });
 
   if (!response.ok) {
