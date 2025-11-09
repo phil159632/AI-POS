@@ -1,27 +1,23 @@
 {
   "version": 2,
-   "installCommand": "corepack enable && pnpm install",
-  "builds": [
-    {
-      "src": "server/routers.ts",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
+  "build": {
+    "env": {
+      "NODE_ENV": "production"
     }
-  ],
+  },
   "rewrites": [
     {
       "source": "/trpc/(.*)",
-      "destination": "/server/routers.ts"
+      "destination": "/api/trpc"
     },
     {
       "source": "/(.*)",
       "destination": "/index.html"
     }
-  ]
+  ],
+  "functions": {
+    "api/trpc.js": {
+      "memory": 1024
+    }
+  }
 }
