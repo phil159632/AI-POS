@@ -509,27 +509,57 @@ ai: router({
 
       try {
         const today = new Date();
+        const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+          const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
         const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
         const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
-        const [monthRevenue, topItems] = await Promise.all([
-          db.getRevenueByTimeRange(input.storeId, startOfMonth, endOfMonth),
-          db.getTopSellingItems(input.storeId, startOfMonth, endOfMonth, 10),
-        ]);
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        sevenDaysAgo.setHours(0, 0, 0, 0);
+         // 並行獲取數據
+          const [todayRevenue, monthRevenue, sevenDaysRevenue, topItems, allItems, recentOrders] = await Promise.all([
+            db.getRevenueByTimeRange(input.storeId, startOfDay, endOfDay),
+            db.getRevenueByTimeRange(input.storeId, startOfMonth, endOfMonth),
+            db.getRevenueByTimeRange(input.storeId, sevenDaysAgo, endOfDay),
+            db.getTopSellingItems(input.storeId, startOfMonth, endOfMonth, 10),
+            db.getMenuItemsByStoreId(input.storeId),
+            db.getOrdersByStoreId(input.storeId),
+          ]);
 
         const fullPrompt = `
-你是一個專業的餐飲業數據分析師。請根據以下提供的店家數據，用清晰、專業、友善的語氣回答使用者的問題。
+你是一個專業的餐飲業數據分析師，負責根據POS系統的銷售資料，回答使用者的問題。
 
-[店家數據]
-- 總營業額 (本月): $${Number(monthRevenue?.totalRevenue || 0).toFixed(0)}
-- 總訂單數 (本月): ${monthRevenue?.totalOrders || 0} 筆
-- 熱銷品項 (本月 TOP 10):
-${topItems.map((item, i) => `  ${i + 1}. ${item.itemName}: 銷售 ${item.totalQuantity} 份`).join('\n')}
+[店家數據摘要]
+### 今日數據
+- 營業額: $${((todayRevenue?.totalRevenue || 0) / 100).toFixed(0)}
+- 訂單數: ${todayRevenue?.totalOrders || 0} 筆
+- 現金收入: $${((todayRevenue?.cashRevenue || 0) / 100).toFixed(0)}
+- 銀行轉帳: $${((todayRevenue?.bankTransferRevenue || 0) / 100).toFixed(0)}
+- 信用卡: $${((todayRevenue?.creditCardRevenue || 0) / 100).toFixed(0)}
+
+### 本月數據
+- 總營業額: $${((monthRevenue?.totalRevenue || 0) / 100).toFixed(0)}
+- 總訂單數: ${monthRevenue?.totalOrders || 0} 筆
+- 平均客單價: $${monthRevenue?.totalOrders ? (((monthRevenue.totalRevenue / monthRevenue.totalOrders) / 100).toFixed(0)) : 0}
+
+### 近7天數據
+- 總營業額: $${((sevenDaysRevenue?.totalRevenue || 0) / 100).toFixed(0)}
+- 總訂單數: ${sevenDaysRevenue?.totalOrders || 0} 筆
+- 日均營業額: $${(((sevenDaysRevenue?.totalRevenue || 0) / 7) / 100).toFixed(0)}
+
+### 熱銷品項 (本月TOP 10)
+${topItems.slice(0, 10).map((item, i) => 
+  `  ${i + 1}. ${item.itemName}: ${item.totalQuantity} 份，營業額 $${(Number(item.totalRevenue) / 100).toFixed(0)}`
+).join('\n')}
+
+- 菜單品項數: ${allItems.length} 個
+- 總訂單數: ${recentOrders.length} 筆
 
 [使用者問題]
 ${input.query}
 
-請根據以上資訊，提供清晰、專業的回答。
-        `;
+請根據上述資料，提供清晰、專業且具洞察力的回答。
+請使用友善、口語化但仍保持專業的語氣。可提出實用建議（例如：調整熱門品項庫存、優化低銷品項推廣等）。
+`;
 
         // 1. 提交任務並獲取 task_id
         const { task_id } = await submitLLMTask(fullPrompt);
