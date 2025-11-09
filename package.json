@@ -1,6 +1,30 @@
 {
   "name": "ai-pos-system",
   "version": "1.0.0",
+   "builds": [
+    {
+      "src": "server/routers.ts",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist",
+        "installCommand": "corepack enable && pnpm install" 
+      }
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/trpc/(.*)",
+      "destination": "/server/routers.ts"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
   "type": "module",
   "license": "MIT",
   
