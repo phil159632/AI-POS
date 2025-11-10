@@ -38,7 +38,7 @@ export async function askGemini(prompt: string): Promise<string> {
           role: "user",
           parts: [{ text: prompt }]
       }],
-      // 安全設定的語法也可能更簡單，我們先暫時移除，如果需要再加回來
+      // 安全設定的語法也可能更簡單，我們先暫時移除，如果需要再加回來.
     });
     
     // 直接從回應中獲取文字
