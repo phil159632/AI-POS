@@ -43,7 +43,9 @@ export async function askGemini(prompt: string): Promise<string> {
     
     // 直接從回應中獲取文字
     const answer = response.text;
-
+console.log("===== 原始 Gemini 回應開始 =====");
+    console.log(answer);
+    console.log("===== 原始 Gemini 回應結束 =====");
     if (!answer) {
       console.error("[Gemini SDK v2] 無法從 API 回應中解析出答案:", response);
       throw new Error("AI 已處理完畢，但未能解析回答內容。");
