@@ -33,7 +33,7 @@ export async function askGemini(prompt: string): Promise<string> {
 
     // 使用新的、更簡潔的 generateContent 方法
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash", // 您也可以根據需要換成 "gemini-1.5-flash" 等
+      model: "gemini-2.5-flash-lite", // 您也可以根據需要換成 "gemini-1.5-flash" 等
       contents: [{
           role: "user",
           parts: [{ text: prompt }]
