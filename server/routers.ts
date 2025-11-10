@@ -1,5 +1,5 @@
 // ==================================================
-// 檔案 3/3: src/server/router.ts (修改後)
+//  src/server/router.ts 
 // ==================================================
 import type { Order } from "../drizzle/schema";
 import { systemRouter } from "./_core/systemRouter";
@@ -10,7 +10,8 @@ import { OAuth2Client } from 'google-auth-library';
 import { TRPCError } from "@trpc/server";
 // 引入我們自己的 session 工具
 import { createSession, setSessionCookie, clearSessionCookie } from "./_core/session";
-
+//genemi串接函數
+import { askGemini } from "./_core/gemini";
 // +++ 核心修正 1：引入正確的函式 +++
 
 // 引入新的 LLM 工具函式
@@ -560,43 +561,48 @@ ${input.query}
 請根據上述資料，提供清晰、專業且具洞察力的回答。
 請使用友善、口語化但仍保持專業的語氣。可提出實用建議（例如：調整熱門品項庫存、優化低銷品項推廣等）。
 `;
+////////////////manus ai呼叫方式/////////////////
+        // // 1. 提交任務並獲取 task_id
+        // const { task_id } = await submitLLMTask(fullPrompt);
+        // if (!task_id) {
+        //   throw new Error("提交 AI 任務後，未能獲取到 Task ID。");
+        // }
+        // console.log(`[AI Router] 成功提交任務，Task ID: ${task_id}`);
 
-        // 1. 提交任務並獲取 task_id
-        const { task_id } = await submitLLMTask(fullPrompt);
-        if (!task_id) {
-          throw new Error("提交 AI 任務後，未能獲取到 Task ID。");
-        }
-        console.log(`[AI Router] 成功提交任務，Task ID: ${task_id}`);
+        // // 2. 開始輪詢，查詢任務結果
+        // let taskResult;
+        // const maxRetries = 20;
+        // const retryInterval = 2000;
 
-        // 2. 開始輪詢，查詢任務結果
-        let taskResult;
-        const maxRetries = 20;
-        const retryInterval = 2000;
+        // for (let i = 0; i < maxRetries; i++) {
+        //   await new Promise(resolve => setTimeout(resolve, retryInterval));
+        //   taskResult = await getLLMTaskResult(task_id);
+        //   console.log(`[AI Router] 輪詢 #${i + 1}: 任務狀態為 "${taskResult.status}"`);
+        //   if (taskResult.status === 'completed' || taskResult.status === 'failed') {
+        //     break;
+        //   }
+        // }
 
-        for (let i = 0; i < maxRetries; i++) {
-          await new Promise(resolve => setTimeout(resolve, retryInterval));
-          taskResult = await getLLMTaskResult(task_id);
-          console.log(`[AI Router] 輪詢 #${i + 1}: 任務狀態為 "${taskResult.status}"`);
-          if (taskResult.status === 'completed' || taskResult.status === 'failed') {
-            break;
-          }
-        }
-
-        // 3. 處理最終結果
-        if (taskResult?.status === 'completed') {
-          // 根據真實的 API 回應結構，精準地提取答案
-          const assistantMessage = taskResult.output?.find(
-            (item: any) => item.role === 'assistant'
-          );
-          const answer = assistantMessage?.content?.[0]?.text || "AI 已處理完畢，但未能解析回答內容。";
+        // // 3. 處理最終結果
+        // if (taskResult?.status === 'completed') {
+        //   // 根據真實的 API 回應結構，精準地提取答案
+        //   const assistantMessage = taskResult.output?.find(
+        //     (item: any) => item.role === 'assistant'
+        //   );
+        //   const answer = assistantMessage?.content?.[0]?.text || "AI 已處理完畢，但未能解析回答內容。";
           
-          console.log("[AI Router] 成功解析出最終答案:", answer);
-          return { response: answer };
-        } else if (taskResult?.status === 'failed') {
-          throw new Error(`AI 任務處理失敗: ${taskResult.error_message || '未知錯誤'}`);
-        } else {
-          throw new Error("AI 任務處理超時，請稍後再試。");
-        }
+        //   console.log("[AI Router] 成功解析出最終答案:", answer);
+        //   return { response: answer };
+        // } else if (taskResult?.status === 'failed') {
+        //   throw new Error(`AI 任務處理失敗: ${taskResult.error_message || '未知錯誤'}`);
+        // } else {
+        //   throw new Error("AI 任務處理超時，請稍後再試。");
+        // }
+// 直接呼叫 Gemini API 並等待結果
+        const answer = await askGemini(fullPrompt);
+
+        // 直接回傳答案
+        return { response: answer };
 
       } catch (error) {
         console.error("AI 查詢程序失敗:", error);
