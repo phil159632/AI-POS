@@ -67,7 +67,7 @@ export default function StoreControl() {
         storeCode: storeData.storeCode || "",
         address: storeData.address || "",
         phone: storeData.phone || "",
-        taxRate: storeData.taxRate || 5,
+        taxRate: storeData.taxRate ?? 5, 
       });
     }
   }, [storeData]);
