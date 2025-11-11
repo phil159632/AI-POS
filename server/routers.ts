@@ -563,47 +563,47 @@ ${input.query}
 **格式要求：請務必使用 Markdown 的 h3 標題 (例如：'### 標題名稱') 來組織您的回答結構，例如 '### 整體表現分析' 或 '### 銷售建議'。**
 `;
 ////////////////manus ai呼叫方式/////////////////
-        // // 1. 提交任務並獲取 task_id
-        // const { task_id } = await submitLLMTask(fullPrompt);
-        // if (!task_id) {
-        //   throw new Error("提交 AI 任務後，未能獲取到 Task ID。");
-        // }
-        // console.log(`[AI Router] 成功提交任務，Task ID: ${task_id}`);
+        // 1. 提交任務並獲取 task_id
+        const { task_id } = await submitLLMTask(fullPrompt);
+        if (!task_id) {
+          throw new Error("提交 AI 任務後，未能獲取到 Task ID。");
+        }
+        console.log(`[AI Router] 成功提交任務，Task ID: ${task_id}`);
 
-        // // 2. 開始輪詢，查詢任務結果
-        // let taskResult;
-        // const maxRetries = 20;
-        // const retryInterval = 2000;
+        // 2. 開始輪詢，查詢任務結果
+        let taskResult;
+        const maxRetries = 20;
+        const retryInterval = 2000;
 
-        // for (let i = 0; i < maxRetries; i++) {
-        //   await new Promise(resolve => setTimeout(resolve, retryInterval));
-        //   taskResult = await getLLMTaskResult(task_id);
-        //   console.log(`[AI Router] 輪詢 #${i + 1}: 任務狀態為 "${taskResult.status}"`);
-        //   if (taskResult.status === 'completed' || taskResult.status === 'failed') {
-        //     break;
-        //   }
-        // }
+        for (let i = 0; i < maxRetries; i++) {
+          await new Promise(resolve => setTimeout(resolve, retryInterval));
+          taskResult = await getLLMTaskResult(task_id);
+          console.log(`[AI Router] 輪詢 #${i + 1}: 任務狀態為 "${taskResult.status}"`);
+          if (taskResult.status === 'completed' || taskResult.status === 'failed') {
+            break;
+          }
+        }
 
-        // // 3. 處理最終結果
-        // if (taskResult?.status === 'completed') {
-        //   // 根據真實的 API 回應結構，精準地提取答案
-        //   const assistantMessage = taskResult.output?.find(
-        //     (item: any) => item.role === 'assistant'
-        //   );
-        //   const answer = assistantMessage?.content?.[0]?.text || "AI 已處理完畢，但未能解析回答內容。";
+        // 3. 處理最終結果
+        if (taskResult?.status === 'completed') {
+          // 根據真實的 API 回應結構，精準地提取答案
+          const assistantMessage = taskResult.output?.find(
+            (item: any) => item.role === 'assistant'
+          );
+          const answer = assistantMessage?.content?.[0]?.text || "AI 已處理完畢，但未能解析回答內容。";
           
-        //   console.log("[AI Router] 成功解析出最終答案:", answer);
-        //   return { response: answer };
-        // } else if (taskResult?.status === 'failed') {
-        //   throw new Error(`AI 任務處理失敗: ${taskResult.error_message || '未知錯誤'}`);
-        // } else {
-        //   throw new Error("AI 任務處理超時，請稍後再試。");
-        // }
+          console.log("[AI Router] 成功解析出最終答案:", answer);
+          return { response: answer };
+        } else if (taskResult?.status === 'failed') {
+          throw new Error(`AI 任務處理失敗: ${taskResult.error_message || '未知錯誤'}`);
+        } else {
+          throw new Error("AI 任務處理超時，請稍後再試。");
+        }
 // 直接呼叫 Gemini API 並等待結果
-        const answer = await askGemini(fullPrompt);
+       // const answer = await askGemini(fullPrompt);
 
         // 直接回傳答案
-        return { response: answer };
+       // return { response: answer };
 
       } catch (error) {
         console.error("AI 查詢程序失敗:", error);
