@@ -21,8 +21,7 @@ export function usePrinter() {
   const requestAndConnectDevice = useCallback(async () => {
     try {
       // 這一行是關鍵，它必須由真實的用戶點擊直接觸發
-      const selectedDevice = await navigator.usb.requestDevice({ filters: PRINTER_FILTERS });
-      
+ const selectedDevice = await navigator.usb.requestDevice({ filters: [] });      
       if (!selectedDevice) {
         toast.info("您已取消選擇印表機。");
         return;

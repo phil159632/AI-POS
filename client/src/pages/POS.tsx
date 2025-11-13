@@ -377,7 +377,7 @@ export default function POS() {
       {/* =================================================================== */}
       {/*  主體內容：使用響應式佈局 */}
       {/* =================================================================== */}
-      <main className="container mx-auto px-4 py-4 flex-1">
+      <main className="container mx-auto px-4 py-4">
         {/* 大螢幕佈局 (lg and up) */}
         <div className="hidden lg:grid lg:grid-cols-12 gap-4 h-full">
           {/* 左側: 桌位選擇 (與您原本的程式碼相同) */}
@@ -438,11 +438,11 @@ export default function POS() {
           </div>
         </div>
 
-        {/* 小螢幕佈局 (lg以下) */}
-        <div className="lg:hidden h-full relative">
+         {/* 小螢幕佈局 (lg以下) */}
+        <div className="lg:hidden relative"> {/* <--- 移除 h-full */}
           {/* 菜單視圖 */}
-          <div className={cn("h-full", mobileView !== 'menu' && 'hidden')}>
-            <div className="space-y-4 h-full flex flex-col">
+          <div className={cn(mobileView !== 'menu' && 'hidden')}> {/* <--- 移除 h-full */}
+            <div className="space-y-4"> {/* <--- 移除 h-full flex flex-col */}
               <div className="flex gap-2">
                 <Select value={orderType} onValueChange={(v: any) => setOrderType(v)}>
                   <SelectTrigger><SelectValue placeholder="訂單類型" /></SelectTrigger>
@@ -461,8 +461,10 @@ export default function POS() {
                   </Select>
                 )}
               </div>
-              <Card className="flex-1 h-0">
-                <CardContent className="p-4 h-full overflow-y-auto">
+              {/* vvvvvvvvvvvv 核心修改 vvvvvvvvvvvv */}
+              <Card> {/* <--- 移除 flex-1 h-0 */}
+                <CardContent className="p-4"> {/* <--- 移除 h-full overflow-y-auto */}
+              {/* ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ */}
                   <Tabs defaultValue={categories?.[0]?.id.toString() || "all"}>
                     <TabsList className="mb-4 flex-wrap h-auto">
                       {categories?.map((cat) => <TabsTrigger key={cat.id} value={cat.id.toString()}>{cat.categoryName}</TabsTrigger>)}
