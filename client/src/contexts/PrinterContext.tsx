@@ -31,6 +31,12 @@ export function PrinterProvider({ children }: { children: ReactNode }) {
   // 核心功能 1: 手動請求並連接新裝置
   // ===================================================================
   const requestAndConnectDevice = useCallback(async () => {
+    // +++ 新增的防禦性檢查 +++
+    if (!navigator.usb) {
+      toast.error("此瀏覽器不支援 WebUSB 功能，請使用桌面版的 Chrome 或 Edge 瀏覽器。");
+      return;
+    }
+    // +++ 檢查結束 +++
     try {
       const selectedDevice = await navigator.usb.requestDevice({ filters: PRINTER_FILTERS });
       if (!selectedDevice) {
@@ -166,6 +172,12 @@ export function PrinterProvider({ children }: { children: ReactNode }) {
   // ===================================================================
   useEffect(() => {
     const handleDisconnect = (event: USBConnectionEvent) => {
+      // +++ 新增的防禦性檢查 +++
+    if (!navigator.usb) {
+      console.warn("WebUSB is not supported in this browser. Skipping USB event listeners.");
+      return; // 直接退出這個 effect，不執行任何後續操作
+    }
+    // +++ 檢查結束 +++
       if (device && event.device.vendorId === device.vendorId && event.device.productId === device.productId) {
         console.log('[WebUSB] 已偵測到印表機斷開連接:', device.productName);
         toast.warning(`印表機 "${device.productName}" 已斷開連接。`);
