@@ -1,34 +1,37 @@
-// ==================================================
-// 檔案：src/pages/StoreControl.tsx (最終修正版)
-// ==================================================
+// src/pages/StoreControl.tsx (整合列印設定)
 
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-
+import { usePrinter } from "@/contexts/PrinterContext"; 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, ArrowLeft, Save } from "lucide-react";
-
-// +++ 核心修正 1：為表單資料定義一個型別 +++
+import { Switch } from "@/components/ui/switch"; // +++ 引入 Switch
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // +++ 引入 Select
+import { Loader2, ArrowLeft, Save, Printer } from "lucide-react";
+// 擴展表單資料的型別
 interface StoreFormData {
   storeName: string;
   storeCode: string;
   address: string;
   phone: string;
-  taxRate: number | string; // 允許是字串，因為 input 的 value 預設是字串
+  taxRate: number | string;
+  defaultPrintReceipt: boolean; // +++ 新增
+  printerEncoding: 'gbk' | 'big5' | 'sjis'; // +++ 新增
 }
 
 export default function StoreControl() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
-  
-  // +++ 核心修正 2：為 useState 提供更精確的型別 <number | null> +++
   const [selectedStoreId, setSelectedStoreId] = useState<number | null>(null);
+  
+  // +++ 初始化 usePrinter Hook
+  const { isConnected, requestAndConnectDevice, device } = usePrinter();
+  const testPrintMutation = trpc.printer.testPrintCommand.useMutation();
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -45,19 +48,19 @@ export default function StoreControl() {
   }, [isAuthenticated, setLocation]);
 
   const { data: storeData, isLoading: isLoadingStore, error: storeError } = trpc.store.getById.useQuery(
-    // +++ 核心修正 3：確保只有在 selectedStoreId 是 number 時才傳遞 input +++
     { storeId: selectedStoreId! }, 
-    { 
-      enabled: !!selectedStoreId,
-    }
+    { enabled: !!selectedStoreId }
   );
 
+  // 為 formData 設定更完整的初始狀態
   const [formData, setFormData] = useState<StoreFormData>({
     storeName: "",
     storeCode: "",
     address: "",
     phone: "",
     taxRate: 5,
+    defaultPrintReceipt: false,
+    printerEncoding: 'gbk',
   });
 
   useEffect(() => {
@@ -67,12 +70,15 @@ export default function StoreControl() {
         storeCode: storeData.storeCode || "",
         address: storeData.address || "",
         phone: storeData.phone || "",
-        taxRate: storeData.taxRate ?? 5, 
+        taxRate: storeData.taxRate ?? 5,
+        // @ts-ignore - Drizzle 返回的可能是 0/1，我們將其轉換為 boolean
+        defaultPrintReceipt: Boolean(storeData.defaultPrintReceipt),
+        // @ts-ignore - 確保 printerEncoding 有一個預設值
+        printerEncoding: storeData.printerEncoding || 'gbk',
       });
     }
   }, [storeData]);
 
-  // +++ 核心修正 4：為事件參數 'e' 提供明確的型別 +++
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -90,7 +96,6 @@ export default function StoreControl() {
 
   const utils = trpc.useUtils();
 
-  // +++ 核心修正 4：為事件參數 'e' 提供明確的型別 +++
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!selectedStoreId) return;
@@ -100,6 +105,25 @@ export default function StoreControl() {
       ...formData,
       taxRate: Number(formData.taxRate),
     });
+  };
+
+  // +++ 新增：處理測試列印的函式
+  const handleTestPrint = async (encoding: 'gbk' | 'big5' | 'sjis') => {
+    if (!isConnected || !device) {
+      toast.info("請先連接印表機再進行測試。");
+      // 嘗試連接，如果成功，用戶可以再次點擊測試
+      await requestAndConnectDevice(); 
+      return;
+    }
+    try {
+      toast.info(`正在發送 [${encoding}] 編碼的測試頁...`);
+      const result = await testPrintMutation.mutateAsync({ encoding });
+      const command = new Uint8Array(result.command);
+      await device.transferOut(1, command);
+      toast.success("測試頁已發送！請檢查列印出的紙張。");
+    } catch (error: any) {
+      toast.error(`測試列印失敗: ${error.message}`);
+    }
   };
 
   if (isLoadingStore) {
@@ -138,81 +162,123 @@ export default function StoreControl() {
         <form onSubmit={handleSubmit}>
           <Card>
             <CardHeader>
-              <CardTitle>編輯店家資訊</CardTitle>
-              <CardDescription>
-                更新後的資訊將會應用於所有相關功能中。
-              </CardDescription>
+              <CardTitle>基本資訊</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
+              {/* ... 原有的店家名稱、代號、地址、電話、稅率欄位 ... */}
               <div className="space-y-2">
                 <Label htmlFor="storeName">店家名稱 *</Label>
-                <Input
-                  id="storeName"
-                  name="storeName"
-                  value={formData.storeName}
-                  onChange={handleInputChange}
-                  placeholder="例如：美味餐廳"
-                  required
-                />
+                <Input id="storeName" name="storeName" value={formData.storeName} onChange={handleInputChange} required />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="storeCode">店家代號 * (3-20字元)</Label>
-                <Input
-                  id="storeCode"
-                  name="storeCode"
-                  value={formData.storeCode}
-                  onChange={handleInputChange}
-                  placeholder="例如：STORE001"
-                  required
-                  minLength={3}
-                  maxLength={20}
-                  disabled
-                />
-                <p className="text-xs text-gray-500">此代號將用於員工加入店家，建議不要修改。</p>
+                <Label htmlFor="storeCode">店家代號 *</Label>
+                <Input id="storeCode" name="storeCode" value={formData.storeCode} onChange={handleInputChange} required disabled />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="address">地址</Label>
-                <Input
-                  id="address"
-                  name="address"
-                  value={formData.address}
-                  onChange={handleInputChange}
-                  placeholder="店家地址"
-                />
+                <Input id="address" name="address" value={formData.address} onChange={handleInputChange} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="phone">電話</Label>
-                <Input
-                  id="phone"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleInputChange}
-                  placeholder="聯絡電話"
-                />
+                <Input id="phone" name="phone" value={formData.phone} onChange={handleInputChange} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="taxRate">稅率 (%)</Label>
-                <Input
-                  id="taxRate"
-                  name="taxRate"
-                  type="number"
-                  value={formData.taxRate}
-                  onChange={handleInputChange}
-                  placeholder="5"
-                  min={0}
-                  max={100}
-                />
+                <Input id="taxRate" name="taxRate" type="number" value={formData.taxRate} onChange={handleInputChange} />
               </div>
-              <Button type="submit" disabled={updateStoreMutation.isPending} className="w-full">
-                {updateStoreMutation.isPending ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Save className="w-4 h-4 mr-2" />
-                )}
-                儲存變更
-              </Button>
             </CardContent>
           </Card>
+
+          <Card className="mt-8">
+            <CardHeader>
+              <CardTitle>出單機列印設定</CardTitle>
+              <CardDescription>
+                設定結帳時的出單機行為與中文字元編碼。
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <Label htmlFor="defaultPrintReceipt" className="text-base">
+                    結帳後預設列印收據
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    開啟後，結帳時「列印收據」的開關將預設為開啟狀態。
+                  </p>
+                </div>
+                <Switch
+                  id="defaultPrintReceipt"
+                  checked={formData.defaultPrintReceipt}
+                  onCheckedChange={(checked) => setFormData(p => ({ ...p, defaultPrintReceipt: checked }))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="printerEncoding">中文字元編碼</Label>
+                <Select
+                  value={formData.printerEncoding}
+                  onValueChange={(value: 'gbk' | 'big5' | 'sjis') => setFormData(p => ({ ...p, printerEncoding: value }))}
+                >
+                  <SelectTrigger id="printerEncoding">
+                    <SelectValue placeholder="選擇編碼" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gbk">GBK (適用於多數中國大陸銷售的印表機)</SelectItem>
+                    <SelectItem value="big5">Big5 (適用於台灣、香港銷售的印表機)</SelectItem>
+                    <SelectItem value="sjis">Shift-JIS (適用於日本銷售的印表機)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  如果列印出的中文是亂碼，請嘗試切換此選項並進行測試。
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>編碼測試</Label>
+                <div className="p-4 border rounded-md bg-slate-50">
+                  <p className="text-sm text-muted-foreground mb-4">
+                    點擊下方按鈕，印表機將會印出一張測試頁。如果頁面上的中文「顯示正常」，則說明該編碼是正確的。
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => handleTestPrint('gbk')}
+                      disabled={testPrintMutation.isPending}
+                      className="flex-1"
+                    >
+                      <Printer className="w-4 h-4 mr-2" /> 測試 GBK
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => handleTestPrint('big5')}
+                      disabled={testPrintMutation.isPending}
+                      className="flex-1"
+                    >
+                      <Printer className="w-4 h-4 mr-2" /> 測試 Big5
+                    </Button>
+                  </div>
+                  {!isConnected && (
+                     <p className="text-xs text-amber-600 mt-3">
+                       提示：尚未連接印表機。點擊測試按鈕將會先引導您連接。
+                     </p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="mt-8">
+            <Button type="submit" disabled={updateStoreMutation.isPending} className="w-full">
+              {updateStoreMutation.isPending ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4 mr-2" />
+              )}
+              儲存所有變更
+            </Button>
+          </div>
         </form>
       </main>
     </div>

@@ -30,8 +30,20 @@ export const stores = mysqlTable("stores", {
   address: text("address"),
   phone: varchar("phone", { length: 20 }),
   taxRate: int("taxRate").default(5).notNull(), // 稅率(百分比)
+   /* 是否預設開啟結帳後列印收據的功能
+   */
+  defaultPrintReceipt: boolean('default_print_receipt').default(false).notNull(),
+
+  /**
+   * 印表機的中文字元集編碼
+   * 'gbk' - 適用於中國大陸銷售的型號
+   * 'big5' - 適用於台灣/香港銷售的型號
+   */
+  printerEncoding: varchar('printer_encoding', { length: 10 }).default('gbk').notNull(),
+  // -----------------
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  
 });
 
 export type Store = typeof stores.$inferSelect;

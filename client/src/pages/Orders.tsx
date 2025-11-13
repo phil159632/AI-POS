@@ -1,3 +1,6 @@
+import { Switch } from "@/components/ui/switch"; // 引入 Switch
+// +++ 1. 確保是從新的 Context 中引入 usePrinter +++
+import { usePrinter } from "@/contexts/PrinterContext"; 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -42,6 +45,9 @@ import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 
 export default function Orders() {
+  const [shouldPrintReceipt, setShouldPrintReceipt] = useState(false); // 新增：列印開關的狀態
+  // 初始化 usePrinter Hook
+const { isConnected, device, requestAndConnectDevice, printOrder } = usePrinter();
   const { isAuthenticated, user } = useAuth();
   const [, setLocation] = useLocation();
   const [selectedStoreId, setSelectedStoreId] = useState<number | null>(() => {
@@ -55,8 +61,20 @@ export default function Orders() {
   const [orderToCancel, setOrderToCancel] = useState<any>(null);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "bank_transfer" | "credit_card">("cash");
   const [paidAmount, setPaidAmount] = useState("");
-  const [startDate, setStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState<string>(new Date().toISOString().split('T')[0]);
+   // 輔助函式：將 Date 物件格式化為 'YYYY-MM-DD'，不受時區影響
+  const formatDate = (date: Date): string => {
+    const year = date.getFullYear();
+    // getMonth() 返回 0-11，所以需要 +1
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  const [startDate, setStartDate] = useState<string>(() => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    return formatDate(yesterday);
+  });
+  const [endDate, setEndDate] = useState<string>(formatDate(new Date()));
   const [userStores, setUserStores] = useState<any[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -112,18 +130,54 @@ export default function Orders() {
     { enabled: !!selectedOrder }
   );
 
-  const updateStatusMutation = trpc.order.updateStatus.useMutation({
-    onSuccess: () => {
-      toast.success("訂單狀態已更新");
-      refetch();
-      setCheckoutDialog(false);
-      setSelectedOrder(null);
-      setPaidAmount("");
-    },
-    onError: (error) => {
-      toast.error(error.message || "更新失敗");
-    },
-  });
+const updateStatusMutation = trpc.order.updateStatus.useMutation({
+  // onSuccess 現在接收兩個參數：後端回傳的 data，以及當初提交的 variables
+  onSuccess: (data, variables) => {
+    toast.success("訂單狀態已更新");
+
+    // --- 核心列印邏輯 ---
+    // 檢查：1. 列印開關是否開啟  2. 印表機是否已連接  3. 訂單詳情是否存在
+    if (shouldPrintReceipt && isConnected && orderDetail) {
+      
+      // 找到當前店家資訊，用於顯示在收據頂部
+      const currentStore = userStores.find(s => s.id === selectedStoreId);
+      
+      // 建立一個包含完整找零資訊的訂單物件來列印
+      // 因為 orderDetail 是結帳前的狀態，不包含 paidAmount 和 changeAmount
+      // 而 variables 包含了我們提交給後端的完整結帳資訊
+      const orderToPrint = {
+        ...orderDetail,
+        paidAmount: variables.paidAmount,
+        changeAmount: variables.changeAmount,
+        paymentMethod: variables.paymentMethod, // 更新為結帳時的支付方式
+      };
+
+      // 從 userStoresData 中找到完整的店家資訊，它包含了 printerEncoding
+const fullStoreData = userStoresData?.find((s: any) => s.storeId === selectedStoreId);
+
+// 呼叫 printOrder，並傳入從店家設定中讀取的編碼
+printOrder(
+  orderToPrint, 
+  { name: fullStoreData?.storeName || '您的店家' },
+  (fullStoreData?.printerEncoding || 'gbk') as 'gbk' | 'big5' | 'sjis'
+);
+
+    } else if (shouldPrintReceipt && !isConnected) {
+      // 如果用戶想列印，但印表機沒連上，給一個溫馨提示
+      toast.warning("已結帳，但因印表機未連接，故未列印收據。");
+    }
+    // --- 核心列印邏輯結束 ---
+
+    // 執行原有的清理操作
+    refetch();
+    setCheckoutDialog(false);
+    setSelectedOrder(null);
+    setPaidAmount("");
+  },
+  onError: (error) => {
+    toast.error(error.message || "更新失敗");
+  },
+});
 
   const cancelOrderMutation = trpc.order.updateStatus.useMutation({
     onSuccess: () => {
@@ -338,12 +392,19 @@ export default function Orders() {
                               <Button
                                 variant="default"
                                 size="sm"
-                                onClick={() => {
-                                  setSelectedOrder(order);
-                                  setShowDetailDialog(false);
-                                  setCheckoutDialog(true);
-                                  setPaidAmount(((order.totalAmount / 100)).toString());
-                                }}
+                               onClick={() => {
+  // 從 userStoresData 中找到完整的店家資訊
+  const fullStoreData = userStoresData?.find((s) => s.storeId === selectedStoreId);
+  
+  // 根據店家的預設設定，來決定開關的初始狀態
+  // @ts-ignore - 忽略可能的 0/1 到 boolean 的類型警告
+ setShouldPrintReceipt(Boolean(fullStoreData?.defaultPrintReceipt));  
+  // --- 以下是您原有的邏輯，保持不變 ---
+  setSelectedOrder(order);
+  setShowDetailDialog(false);
+  setCheckoutDialog(true);
+  setPaidAmount(((order.totalAmount / 100)).toString());
+}}
                               >
                                 <CreditCard className="w-4 h-4 mr-1" />
                                 結帳
@@ -484,83 +545,115 @@ export default function Orders() {
         </DialogContent>
       </Dialog>
 
-      {/* 結帳對話框 */}
-      <Dialog open={checkoutDialog} onOpenChange={(open) => {
-        if (!open) {
-          setCheckoutDialog(false);
-        }
-      }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center">
-              <DollarSign className="w-5 h-5 mr-2 text-green-600" />
-              結帳
-            </DialogTitle>
-            <DialogDescription>
-              訂單編號: {orderDetail?.orderNumber}
-            </DialogDescription>
-          </DialogHeader>
-          {orderDetail && (
-            <div className="space-y-4">
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <div className="flex justify-between items-center">
-                  <span className="text-lg font-semibold">應付金額</span>
-                  <span className="text-2xl font-bold text-blue-600">
-                    ${(orderDetail.totalAmount / 100).toFixed(0)}
-                  </span>
-                </div>
-              </div>
+     {/* 結帳對話框 */}
+<Dialog open={checkoutDialog} onOpenChange={(open) => {
+  if (!open) {
+    setCheckoutDialog(false);
+  }
+}}>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle className="flex items-center">
+        <DollarSign className="w-5 h-5 mr-2 text-green-600" />
+        結帳
+      </DialogTitle>
+      <DialogDescription>
+        訂單編號: {orderDetail?.orderNumber}
+      </DialogDescription>
+    </DialogHeader>
+    {orderDetail && (
+      <div className="space-y-4">
+        <div className="bg-blue-50 p-4 rounded-lg">
+          <div className="flex justify-between items-center">
+            <span className="text-lg font-semibold">應付金額</span>
+            <span className="text-2xl font-bold text-blue-600">
+              ${(orderDetail.totalAmount / 100).toFixed(0)}
+            </span>
+          </div>
+        </div>
 
-              <div className="space-y-2">
-                <Label>付款方式</Label>
-                <Select value={paymentMethod} onValueChange={(v: any) => setPaymentMethod(v)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cash">現金</SelectItem>
-                    <SelectItem value="bank_transfer">銀行轉帳</SelectItem>
-                    <SelectItem value="credit_card">信用卡</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>實付金額</Label>
-                <Input
-                  type="number"
-                  placeholder="輸入實付金額"
-                  value={paidAmount}
-                  onChange={(e) => setPaidAmount(e.target.value)}
-                  min={0}
-                  step={1}
-                />
-              </div>
-
-              {paidAmount && parseFloat(paidAmount) >= (orderDetail.totalAmount / 100) && (
-                <div className="bg-green-50 p-4 rounded-lg">
-                  <div className="flex justify-between items-center">
-                    <span className="text-lg font-semibold text-green-800">找零</span>
-                    <span className="text-2xl font-bold text-green-600">
-                      ${(parseFloat(paidAmount) - (orderDetail.totalAmount / 100)).toFixed(0)}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-end space-x-2 pt-4">
-                <Button variant="outline" onClick={() => setCheckoutDialog(false)}>
-                  取消
-                </Button>
-                <Button onClick={handleCheckout} disabled={updateStatusMutation.isPending}>
-                  {updateStatusMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  確認結帳
-                </Button>
-              </div>
-            </div>
+        {/* --- 核心修改：新增的列印開關 UI --- */}
+        <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm bg-white">
+          <div className="space-y-0.5">
+            <Label htmlFor="print-receipt" className="text-base">
+              列印顧客收據
+            </Label>
+            <p className="text-[0.8rem] text-gray-500">
+              {isConnected 
+                ? `已連接到: ${device?.productName}` 
+                : "未偵測到印表機"}
+            </p>
+          </div>
+          {isConnected ? (
+            <Switch
+              id="print-receipt"
+              checked={shouldPrintReceipt}
+              onCheckedChange={setShouldPrintReceipt}
+              aria-label="列印收據開關"
+            />
+          ) : (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={requestAndConnectDevice}
+            >
+              連接印表機
+            </Button>
           )}
-        </DialogContent>
-      </Dialog>
+        </div>
+        {/* --- 核心修改結束 --- */}
+
+        <div className="space-y-2">
+          <Label>付款方式</Label>
+          <Select value={paymentMethod} onValueChange={(v: any) => setPaymentMethod(v)}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="cash">現金</SelectItem>
+              <SelectItem value="bank_transfer">銀行轉帳</SelectItem>
+              <SelectItem value="credit_card">信用卡</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label>實付金額</Label>
+          <Input
+            type="number"
+            placeholder="輸入實付金額"
+            value={paidAmount}
+            onChange={(e) => setPaidAmount(e.target.value)}
+            min={0}
+            step={1}
+          />
+        </div>
+
+        {paidAmount && parseFloat(paidAmount) >= (orderDetail.totalAmount / 100) && (
+          <div className="bg-green-50 p-4 rounded-lg">
+            <div className="flex justify-between items-center">
+              <span className="text-lg font-semibold text-green-800">找零</span>
+              <span className="text-2xl font-bold text-green-600">
+                ${(parseFloat(paidAmount) - (orderDetail.totalAmount / 100)).toFixed(0)}
+              </span>
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-end space-x-2 pt-4">
+          <Button variant="outline" onClick={() => setCheckoutDialog(false)}>
+            取消
+          </Button>
+          <Button onClick={handleCheckout} disabled={updateStatusMutation.isPending}>
+            {updateStatusMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            確認結帳
+          </Button>
+        </div>
+      </div>
+    )}
+  </DialogContent>
+</Dialog>
+
 
       {/* 取消訂單確認對話框 */}
       <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>

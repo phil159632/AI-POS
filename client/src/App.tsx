@@ -2,6 +2,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
+import { PrinterProvider } from "./contexts/PrinterContext"; 
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { StoreProvider } from "./contexts/StoreContext";
@@ -42,10 +43,12 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light">
         <StoreProvider>
+          <PrinterProvider> {/* +++ 2. 在這裡用 PrinterProvider 包裹住 Router +++ */}
           <TooltipProvider>
             <Toaster />
             <Router />
           </TooltipProvider>
+           </PrinterProvider>
         </StoreProvider>
       </ThemeProvider>
     </ErrorBoundary>

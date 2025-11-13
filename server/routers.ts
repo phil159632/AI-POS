@@ -13,7 +13,7 @@ import { createSession, setSessionCookie, clearSessionCookie } from "./_core/ses
 //genemi串接函數
 import { askGemini } from "./_core/gemini";
 // +++ 核心修正 1：引入正確的函式 +++
-
+import { printerRouter } from './_core/printerRouter';
 // 引入新的 LLM 工具函式
 import { submitLLMTask, getLLMTaskResult } from "./_core/llm"; 
 // 初始化 Google Auth Client
@@ -25,6 +25,8 @@ const googleClient = new OAuth2Client(googleClientId);
 
 export const appRouter = router({
   system: systemRouter,
+  // 2. 在這裡註冊新的 printerRouter
+  printer: printerRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     
@@ -113,6 +115,9 @@ export const appRouter = router({
         address: z.string().optional(),
         phone: z.string().optional(),
         taxRate: z.number().min(0).max(100).optional(),
+        // --- 請在這裡加入以下兩行 ---
+        defaultPrintReceipt: z.boolean(),
+        printerEncoding: z.enum(['gbk', 'big5', 'sjis']),
       }))
       .mutation(async ({ ctx, input }) => {
         const { storeId, ...updateData } = input;

@@ -183,6 +183,10 @@ export async function getStoreStaffByUserId(userId: number) {
       isActive: storeStaff.isActive,
       storeName: stores.storeName,
       storeCode: stores.storeCode,
+      // +++ 核心修改：在這裡加入我們需要的兩個欄位 +++
+      defaultPrintReceipt: stores.defaultPrintReceipt,
+      printerEncoding: stores.printerEncoding,
+      
     })
     .from(storeStaff)
     .leftJoin(stores, eq(storeStaff.storeId, stores.id))
