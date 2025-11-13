@@ -329,7 +329,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const subtotal = input.items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
         const store = await db.getStoreById(input.storeId);
-        const taxRate = store?.taxRate || 5;
+        const taxRate = store?.taxRate ?? 5;
         const taxAmount = Math.round(subtotal * taxRate / 100);
         const totalAmount = subtotal + taxAmount;
         const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -405,7 +405,7 @@ export const appRouter = router({
   // 5. 我們需要根據新的品項，重新計算總金額
   if (items) {
     const store = await db.getStoreById((await db.getOrderById(orderId))!.storeId);
-    const taxRate = store?.taxRate || 5;
+    const taxRate = store?.taxRate ?? 5;
     
     const subtotal = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
     const taxAmount = Math.round(subtotal * taxRate / 100);
