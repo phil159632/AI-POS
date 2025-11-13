@@ -1,4 +1,4 @@
-// client/src/contexts/PrinterContext.tsx (最終完整版)
+// client/src/contexts/PrinterContext.tsx (最終完整版 + 斷線偵測)
 
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import { toast } from 'sonner';
@@ -21,7 +21,6 @@ const PrinterContext = createContext<PrinterContextType | undefined>(undefined);
 
 // 建立一個 Provider 元件，它將包裹我們的整個應用
 export function PrinterProvider({ children }: { children: ReactNode }) {
-  // --- 以下是從 usePrinter.ts 完整移植過來的邏輯 ---
   const [device, setDevice] = useState<USBDevice | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
@@ -53,7 +52,7 @@ export function PrinterProvider({ children }: { children: ReactNode }) {
         toast.error(`連接印表機失敗: ${error.message}`);
       }
     }
-  }, []); // 空依賴項，保證函式穩定
+  }, []);
 
   // ===================================================================
   // 核心功能 2: 列印正式訂單
@@ -97,7 +96,15 @@ export function PrinterProvider({ children }: { children: ReactNode }) {
 
     } catch (error: any) {
       console.error("列印流程失敗:", error);
-      toast.error(`列印失敗: ${error.message}`);
+      // 捕獲到斷線錯誤時，給予更明確的提示
+      if (error instanceof DOMException && error.name === 'NetworkError') {
+        toast.error("列印失敗：印表機已斷開連接。");
+        // 主動重置狀態
+        setIsConnected(false);
+        setDevice(null);
+      } else {
+        toast.error(`列印失敗: ${error.message}`);
+      }
     }
   }, [device, generateCommandMutation]);
 
@@ -105,7 +112,6 @@ export function PrinterProvider({ children }: { children: ReactNode }) {
   // 核心功能 3: 測試列印
   // ===================================================================
   const testPrint = useCallback(async (encoding: 'gbk' | 'big5' | 'sjis') => {
-    // 這裡的邏輯稍微調整：如果未連接，只提示，不自動觸發連接，讓使用者決定
     if (!device) {
       toast.error("請先連接印表機，再進行測試");
       return;
@@ -125,7 +131,13 @@ export function PrinterProvider({ children }: { children: ReactNode }) {
 
     } catch (error: any) {
       console.error("測試列印失敗:", error);
-      toast.error(`測試列印失敗: ${error.message}`);
+      if (error instanceof DOMException && error.name === 'NetworkError') {
+        toast.error("測試失敗：印表機已斷開連接。");
+        setIsConnected(false);
+        setDevice(null);
+      } else {
+        toast.error(`測試列印失敗: ${error.message}`);
+      }
     }
   }, [device, testPrintMutation]);
 
@@ -148,6 +160,39 @@ export function PrinterProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [device]);
+
+  // ===================================================================
+  // 核心功能 5: 監聽 USB 連接與斷開事件 (新增！)
+  // ===================================================================
+  useEffect(() => {
+    const handleDisconnect = (event: USBConnectionEvent) => {
+      if (device && event.device.vendorId === device.vendorId && event.device.productId === device.productId) {
+        console.log('[WebUSB] 已偵測到印表機斷開連接:', device.productName);
+        toast.warning(`印表機 "${device.productName}" 已斷開連接。`);
+        setIsConnected(false);
+        setDevice(null);
+      }
+    };
+
+    const handleConnect = (event: USBConnectionEvent) => {
+      // 僅提示，不自動連接
+      const isKnownPrinter = PRINTER_FILTERS.some(filter => 
+        filter.vendorId === event.device.vendorId && filter.productId === event.device.productId
+      );
+      if (isKnownPrinter) {
+        console.log('[WebUSB] 偵測到已知印表機插入:', event.device.productName);
+        toast.info(`偵測到印表機 "${event.device.productName}"，您可以點擊按鈕進行連接。`);
+      }
+    };
+
+    navigator.usb.addEventListener('disconnect', handleDisconnect);
+    navigator.usb.addEventListener('connect', handleConnect);
+
+    return () => {
+      navigator.usb.removeEventListener('disconnect', handleDisconnect);
+      navigator.usb.removeEventListener('connect', handleConnect);
+    };
+  }, [device]); // 依賴項是 device，確保我們總能訪問到最新的 device 物件
 
   // 將所有狀態和函式，透過 value 屬性提供給所有子元件
   const value = { isConnected, device, requestAndConnectDevice, printOrder, testPrint };
